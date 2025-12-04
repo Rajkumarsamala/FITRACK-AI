@@ -38,24 +38,24 @@ async function initStripe() {
     const webhookUrl = `${webhookBaseUrl}/api/webhook/stripe`;
     try {
       const stripe = await getUncachableStripeClient();
-      
+
       const existingWebhooks = await stripe.webhookEndpoints.list();
-      const existingWebhook = existingWebhooks.data.find(w => 
+      const existingWebhook = existingWebhooks.data.find(w =>
         w.url === webhookUrl && w.metadata?.managed_by === 'stripe-sync'
       );
-      
+
       if (existingWebhook) {
         await stripe.webhookEndpoints.del(existingWebhook.id);
         console.log('Deleted old webhook to create fresh one with secret');
       }
-      
+
       const newWebhook = await stripe.webhookEndpoints.create({
         url: webhookUrl,
         enabled_events: ['checkout.session.completed', 'customer.subscription.updated', 'customer.subscription.deleted'],
         description: 'Managed webhook for FitTrack AI',
         metadata: { managed_by: 'stripe-sync' }
       });
-      
+
       webhookSecretGlobal = newWebhook.secret || null;
       console.log('Webhook configured:', newWebhook.url);
       if (webhookSecretGlobal) {
@@ -80,39 +80,35 @@ async function initStripe() {
 
 initStripe().catch(console.error);
 
+// Stripe webhook (raw body first)
 app.post(
   '/api/webhook/stripe',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
     const signature = req.headers['stripe-signature'];
-
-    if (!signature) {
-      return res.status(400).json({ error: 'Missing stripe-signature' });
-    }
+    if (!signature) return res.status(400).json({ error: 'Missing stripe-signature' });
 
     try {
       const sig = Array.isArray(signature) ? signature[0] : signature;
-
       if (!Buffer.isBuffer(req.body)) {
         console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer.');
         return res.status(500).json({ error: 'Webhook processing error' });
       }
 
       const stripe = await getUncachableStripeClient();
-      
       if (!webhookSecretGlobal) {
         console.error('Webhook secret not available - cannot verify signature');
         return res.status(500).json({ error: 'Webhook not properly configured' });
       }
-      
+
       const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecretGlobal);
-      
+
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object as any;
         const userId = session.metadata?.userId;
         const subscriptionId = session.subscription as string;
         const customerId = session.customer as string;
-        
+
         if (userId && subscriptionId) {
           await storage.upsertSubscription({
             userId,
@@ -128,7 +124,7 @@ app.post(
       } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
         const subscription = event.data.object as any;
         const existingSub = await storage.getSubscriptionByStripeId(subscription.id);
-        
+
         if (existingSub) {
           const isActive = subscription.status === 'active';
           await storage.upsertSubscription({
@@ -152,6 +148,7 @@ app.post(
   }
 );
 
+// JSON parser (after raw handler)
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -169,7 +166,6 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
-
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
@@ -191,7 +187,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -199,13 +194,28 @@ app.use((req, res, next) => {
   next();
 });
 
+/* -------------------- ⭐ ADDED: health + safe user endpoint -------------------- */
+
+// Health check for Render
+app.get('/healthz', (_req, res) => res.status(200).send('ok'));
+
+// Guard /api/auth/user so it doesn't 500 when no OIDC/session
+app.use('/api/auth/user', (req, res, next) => {
+  const user: any = (req as any).user || null;
+  if (!user) {
+    return res.json({ authenticated: false, user: null });
+  }
+  // let the original route (in registerRoutes) handle when logged in
+  next();
+});
+/* ----------------------------------------------------------------------------- */
+
 (async () => {
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     res.status(status).json({ message });
     throw err;
   });
