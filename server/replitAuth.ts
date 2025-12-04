@@ -1,3 +1,4 @@
+// server/replitAuth.ts
 import * as client from "openid-client";
 import { Strategy, type VerifyFunction } from "openid-client/passport";
 
@@ -8,20 +9,15 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
+// ✅ OIDC is only enabled if REPL_ID exists (Replit). On Render it's undefined.
+const OIDC_ENABLED = !!process.env.REPL_ID;
+
+/* -------------------- Sessions (kept for both modes) -------------------- */
 const getOidcConfig = memoize(
   async () => {
-    try {
-      console.log("[auth] Discovering OIDC config for REPL_ID:", process.env.REPL_ID);
-      const config = await client.discovery(
-        new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-        process.env.REPL_ID!
-      );
-      console.log("[auth] OIDC config discovered successfully");
-      return config;
-    } catch (error) {
-      console.error("[auth] Failed to discover OIDC config:", error);
-      throw error;
-    }
+    // This function is only called when OIDC_ENABLED === true
+    const issuer = new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc");
+    return client.discovery(issuer, process.env.REPL_ID!);
   },
   { maxAge: 3600 * 1000 }
 );
@@ -59,9 +55,7 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
-async function upsertUser(
-  claims: any,
-) {
+async function upsertUser(claims: any) {
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
@@ -71,18 +65,34 @@ async function upsertUser(
   });
 }
 
+/* -------------------- Main setup -------------------- */
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
 
+  if (!OIDC_ENABLED) {
+    console.log("[auth] OIDC disabled (REPL_ID not set). Running without Replit OIDC.");
+    // Lightweight routes so frontend doesn’t error if it calls them.
+    app.get("/api/login", (_req, res) =>
+      res.status(501).json({ message: "OIDC is disabled on this deployment." })
+    );
+    app.get("/api/callback", (_req, res) => res.redirect("/"));
+    app.get("/api/logout", (req, res) => req.logout(() => res.redirect("/")));
+    return; // ✅ Skip all OIDC wiring
+  }
+
+  // --- OIDC path (only on Replit / when REPL_ID exists) ---
   let config: Awaited<ReturnType<typeof getOidcConfig>>;
   try {
+    console.log("[auth] Discovering OIDC config for REPL_ID:", process.env.REPL_ID);
     config = await getOidcConfig();
+    console.log("[auth] OIDC config discovered successfully");
   } catch (error) {
     console.error("[auth] Failed to setup auth - OIDC discovery failed:", error);
-    throw error;
+    // Do NOT crash the server; just run without OIDC.
+    return;
   }
 
   const verify: VerifyFunction = async (
@@ -96,20 +106,14 @@ export async function setupAuth(app: Express) {
   };
 
   const registeredStrategies = new Set<string>();
-
   const ensureStrategy = (domain: string) => {
     const strategyName = `replitauth:${domain}`;
     if (!registeredStrategies.has(strategyName)) {
       const callbackURL = `https://${domain}/api/callback`;
       console.log("[auth] Registering strategy for domain:", domain, "with callback:", callbackURL);
       const strategy = new Strategy(
-        {
-          name: strategyName,
-          config,
-          scope: "openid email profile offline_access",
-          callbackURL,
-        },
-        verify,
+        { name: strategyName, config, scope: "openid email profile offline_access", callbackURL },
+        verify
       );
       passport.use(strategy);
       registeredStrategies.add(strategyName);
@@ -120,7 +124,6 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    console.log("[auth] Login initiated for hostname:", req.hostname);
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
@@ -129,18 +132,11 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/callback", (req, res, next) => {
-    console.log("[auth] Callback received for hostname:", req.hostname);
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
-    })(req, res, (err: any) => {
-      if (err) {
-        console.error("[auth] Callback error:", err);
-        return res.redirect("/api/login");
-      }
-      next();
-    });
+    })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
@@ -155,31 +151,30 @@ export async function setupAuth(app: Express) {
   });
 }
 
+/* -------------------- Guarded auth middleware -------------------- */
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
+  if (!OIDC_ENABLED) {
+    // In non-OIDC deployments, let requests pass (or change to 401 if you prefer).
+    return next();
+  }
 
+  const user = req.user as any;
   if (!req.isAuthenticated() || !user.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
-  }
+  if (now <= user.expires_at) return next();
 
   const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  if (!refreshToken) return res.status(401).json({ message: "Unauthorized" });
 
   try {
     const config = await getOidcConfig();
     const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
     updateUserSession(user, tokenResponse);
     return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
+  } catch {
+    return res.status(401).json({ message: "Unauthorized" });
   }
 };
