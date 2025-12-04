@@ -4,10 +4,26 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import type { InsertBodyScan } from "@shared/schema";
 import { getUncachableStripeClient } from "./stripeClient";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
-const PREMIUM_PRICE_AMOUNT = 999;
-const PREMIUM_PRODUCT_NAME = "FitTrack AI Premium";
-const PREMIUM_PRODUCT_DESC = "Unlimited AI body scans, personalized recommendations, and progress tracking";
+async function getPremiumPriceId(): Promise<string | null> {
+  try {
+    const result = await db.execute(
+      sql`SELECT id FROM stripe.prices 
+          WHERE active = true 
+          AND product IN (
+            SELECT id FROM stripe.products WHERE name = 'FitTrack AI Premium' AND active = true
+          )
+          ORDER BY created DESC 
+          LIMIT 1`
+    );
+    return (result.rows[0] as any)?.id || null;
+  } catch (error) {
+    console.error('Error fetching premium price:', error);
+    return null;
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -149,6 +165,11 @@ export async function registerRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
+      const priceId = await getPremiumPriceId();
+      if (!priceId) {
+        return res.status(500).json({ message: "Premium plan not configured" });
+      }
+
       const stripe = await getUncachableStripeClient();
       const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
 
@@ -171,17 +192,7 @@ export async function registerRoutes(
         payment_method_types: ['card'],
         line_items: [
           {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: PREMIUM_PRODUCT_NAME,
-                description: PREMIUM_PRODUCT_DESC,
-              },
-              unit_amount: PREMIUM_PRICE_AMOUNT,
-              recurring: {
-                interval: 'month',
-              },
-            },
+            price: priceId,
             quantity: 1,
           },
         ],

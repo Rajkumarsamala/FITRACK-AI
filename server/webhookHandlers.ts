@@ -1,5 +1,4 @@
 import { getStripeSync } from './stripeClient';
-import { storage } from './storage';
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string, uuid: string): Promise<void> {
@@ -14,18 +13,5 @@ export class WebhookHandlers {
 
     const sync = await getStripeSync();
     await sync.processWebhook(payload, signature, uuid);
-  }
-
-  static async handleSubscriptionUpdate(subscriptionId: string, customerId: string, status: string): Promise<void> {
-    const user = await storage.getUserByStripeCustomerId(customerId);
-    if (user) {
-      await storage.upsertSubscription({
-        userId: user.id,
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        status: status === 'active' ? 'active' : 'inactive',
-        plan: status === 'active' ? 'premium' : 'free',
-      });
-    }
   }
 }
