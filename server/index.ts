@@ -3,13 +3,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import path from "path"; // ⬅️ added
+import path from "path";
 
-// ⬇️ Razorpay routes
+// Razorpay routes
 import { razorpayRoutes } from "./razorpayRoutes";
 import { razorpayWebhook } from "./razorpayWebhook";
 
-// If you use anything from storage elsewhere, keep this import
+// Storage
 import { storage } from "./storage";
 
 const app = express();
@@ -19,7 +19,7 @@ const httpServer = createServer(app);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Simple request logger for /api paths
+// Logger
 function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -33,40 +33,40 @@ function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const pathName = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let capturedJsonResponse: any;
 
-  const originalResJson = res.json;
+  const originalJson = res.json;
   // @ts-ignore
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    // @ts-ignore
-    return originalResJson.apply(res, [bodyJson, ...args]);
+  res.json = function (body, ...args) {
+    capturedJsonResponse = body;
+    return originalJson.apply(res, [body, ...args]);
   };
 
   res.on("finish", () => {
-    const duration = Date.now() - start;
     if (pathName.startsWith("/api")) {
-      let logLine = `${req.method} ${pathName} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      log(logLine);
+      const ms = Date.now() - start;
+      let txt = `${req.method} ${pathName} ${res.statusCode} in ${ms}ms`;
+      if (capturedJsonResponse) txt += " :: " + JSON.stringify(capturedJsonResponse);
+      log(txt);
     }
   });
 
   next();
 });
 
-// ---------- Health + safe user endpoint ----------
-app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+// ---------- Health ----------
+app.get("/healthz", (_req, res) => res.send("ok"));
 
-// Guard /api/auth/user so it doesn't 500 when no OIDC/session
+// Safe fallback for /api/auth/user
 app.use("/api/auth/user", (req, res, next) => {
-  const user: any = (req as any).user || null;
+  const user = (req as any).user || null;
   if (!user) return res.json({ authenticated: false, user: null });
   next();
 });
 
-// ---------- Public Policy Pages (for Razorpay) ----------
-const POLICY_DIR = path.join(process.cwd(), "server", "policies");
+// ---------- PUBLIC POLICY PAGES (Fix 404) ----------
+const POLICY_DIR = path.join(__dirname, "policies");  
+// __dirname = /opt/render/project/src/server at runtime
 
 app.get("/privacy", (_req, res) =>
   res.sendFile(path.join(POLICY_DIR, "privacy.html"))
@@ -92,16 +92,15 @@ app.get("/contact", (_req, res) =>
 app.use(razorpayRoutes);
 app.use(razorpayWebhook);
 
-// ---------- Your existing app routes / static / dev server ----------
+// ---------- App Routes / Static / Vite ----------
 (async () => {
   await registerRoutes(httpServer, app);
 
-  // Centralized error handler
+  // Error Handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    res.status(status).json({ message });
-    throw err;
+    const status = err.status || 500;
+    res.status(status).json({ message: err.message || "Server Error" });
+    console.error(err);
   });
 
   if (process.env.NODE_ENV === "production") {
@@ -111,9 +110,9 @@ app.use(razorpayWebhook);
     await setupVite(httpServer, app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "5000");
   httpServer.listen(
-    { port, host: "0.0.0.0", reusePort: true },
+    { port, host: "0.0.0.0" },
     () => log(`serving on port ${port}`)
   );
 })();
