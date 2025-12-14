@@ -16,23 +16,17 @@ const app = express();
 const httpServer = createServer(app);
 
 // ------------------------------------------------------
-// 1. SECURITY MIDDLEWARE (VERY IMPORTANT)
+// 1. SECURITY MIDDLEWARE
 // ------------------------------------------------------
 
-// Adds all important headers:
-// - Strict-Transport-Security
-// - X-Frame-Options
-// - X-Content-Type-Options
-// - Referrer-Policy
-// - Permissions-Policy
-// - X-XSS-Protection (legacy browser protection)
+// Basic helmet protections
 app.use(
   helmet({
-    contentSecurityPolicy: false, // CSP added manually below
+    contentSecurityPolicy: false, // using custom CSP
   })
 );
 
-// Strong Content Security Policy (protects from XSS)
+// Custom, safe CSP (DO NOT TOUCH unless needed)
 app.use(
   helmet.contentSecurityPolicy({
     directives: {
@@ -43,13 +37,16 @@ app.use(
       connectSrc: ["'self'"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
-      baseUri: ["'self'"]
+      baseUri: ["'self'"],
+      formAction: ["'self'"], 
     },
   })
 );
 
-// Extra hardening (recommended)
+// Referrer policy
 app.use(helmet.referrerPolicy({ policy: "no-referrer" }));
+
+// Permissions policy
 app.use(
   helmet.permissionsPolicy({
     features: {
@@ -60,12 +57,13 @@ app.use(
   })
 );
 
-// Rate limiting (protect API abuse / bots)
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 50, // allow 50 req/min per IP
-});
-app.use(limiter);
+// Rate limit: prevents backend abuse
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000, // 1 min
+    max: 50,
+  })
+);
 
 // ------------------------------------------------------
 // BASIC MIDDLEWARE
@@ -79,7 +77,7 @@ app.use(express.urlencoded({ extended: false }));
 app.get("/healthz", (_req, res) => res.send("ok"));
 
 // ------------------------------------------------------
-// PUBLIC POLICY PAGES
+// STATIC POLICY PAGES
 // ------------------------------------------------------
 const POLICY_DIR = path.join(__dirname, "policies");
 
@@ -100,19 +98,19 @@ app.get("/contact", (_req, res) =>
 );
 
 // ------------------------------------------------------
-// RAZORPAY ROUTES
+// PAYMENT ROUTES
 // ------------------------------------------------------
 app.use(razorpayRoutes);
 app.use(razorpayWebhook);
 
 // ------------------------------------------------------
-// APP API ROUTES / DASHBOARD / AUTH
+// MAIN APP API
 // ------------------------------------------------------
 (async () => {
   await registerRoutes(httpServer, app);
 
   // ------------------------------------------------------
-  // SAFE ERROR HANDLER (prevent internal info leak)
+  // SAFE ERROR HANDLER
   // ------------------------------------------------------
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("Server Error:", err);
@@ -122,7 +120,7 @@ app.use(razorpayWebhook);
   });
 
   // ------------------------------------------------------
-  // STATIC FILES (frontend build)
+  // SERVE FRONTEND
   // ------------------------------------------------------
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
