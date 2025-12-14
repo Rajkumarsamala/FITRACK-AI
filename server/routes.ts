@@ -25,15 +25,26 @@ async function getPremiumPriceId(): Promise<string | null> {
   }
 }
 
+function safeUser(req: any, res: any): string | null {
+  if (!req.user || !req.user.claims || !req.user.claims.sub) {
+    res.status(401).json({ error: "Unauthorized: Missing user claims" });
+    return null;
+  }
+  return req.user.claims.sub;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  
   await setupAuth(app);
 
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -43,8 +54,10 @@ export async function registerRoutes(
   });
 
   app.get('/api/subscription', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
       const subscription = await storage.getSubscription(userId);
       res.json(subscription || { status: 'inactive', plan: 'free' });
     } catch (error) {
@@ -54,8 +67,10 @@ export async function registerRoutes(
   });
 
   app.get('/api/trial-usage', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
       const usage = await storage.getTrialUsage(userId);
       res.json(usage || { bodyScanUsed: false });
     } catch (error) {
@@ -65,8 +80,10 @@ export async function registerRoutes(
   });
 
   app.post('/api/trial-usage/use', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
       const existingUsage = await storage.getTrialUsage(userId);
       
       if (existingUsage?.bodyScanUsed) {
@@ -82,8 +99,10 @@ export async function registerRoutes(
   });
 
   app.get('/api/body-scans', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
       const scans = await storage.getBodyScans(userId);
       res.json(scans);
     } catch (error) {
@@ -93,9 +112,10 @@ export async function registerRoutes(
   });
 
   app.post('/api/body-scans', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
-      
       const subscription = await storage.getSubscription(userId);
       const trialUsage = await storage.getTrialUsage(userId);
       
@@ -136,8 +156,10 @@ export async function registerRoutes(
   });
 
   app.get('/api/can-scan', isAuthenticated, async (req: any, res) => {
+    const userId = safeUser(req, res);
+    if (!userId) return;
+
     try {
-      const userId = req.user.claims.sub;
       const subscription = await storage.getSubscription(userId);
       const trialUsage = await storage.getTrialUsage(userId);
       
@@ -153,85 +175,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error checking scan permission:", error);
       res.status(500).json({ message: "Failed to check scan permission" });
-    }
-  });
-
-  app.get('/api/create-checkout-session', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      const priceId = await getPremiumPriceId();
-      if (!priceId) {
-        return res.status(500).json({ message: "Premium plan not configured" });
-      }
-
-      const stripe = await getUncachableStripeClient();
-      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
-
-      let customerId: string;
-      const existingSub = await storage.getSubscription(userId);
-      
-      if (existingSub?.stripeCustomerId) {
-        customerId = existingSub.stripeCustomerId;
-      } else {
-        const customer = await stripe.customers.create({
-          email: user.email || undefined,
-          metadata: { userId },
-        });
-        customerId = customer.id;
-        await storage.updateUserStripeCustomerId(userId, customerId);
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
-        mode: 'subscription',
-        success_url: `${baseUrl}/premium?success=true`,
-        cancel_url: `${baseUrl}/premium?canceled=true`,
-        metadata: {
-          userId,
-        },
-      });
-
-      res.redirect(session.url!);
-    } catch (error) {
-      console.error("Error creating checkout session:", error);
-      res.status(500).json({ message: "Failed to create checkout session" });
-    }
-  });
-
-  app.get('/api/customer-portal', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const subscription = await storage.getSubscription(userId);
-      
-      if (!subscription?.stripeCustomerId) {
-        return res.status(400).json({ message: "No subscription found" });
-      }
-
-      const stripe = await getUncachableStripeClient();
-      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
-      
-      const session = await stripe.billingPortal.sessions.create({
-        customer: subscription.stripeCustomerId,
-        return_url: `${baseUrl}/premium`,
-      });
-
-      res.redirect(session.url);
-    } catch (error) {
-      console.error("Error creating portal session:", error);
-      res.status(500).json({ message: "Failed to create portal session" });
     }
   });
 
