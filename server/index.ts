@@ -5,12 +5,67 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+
 import { razorpayRoutes } from "./razorpayRoutes";
 import { razorpayWebhook } from "./razorpayWebhook";
 import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
+
+// ------------------------------------------------------
+// 1. SECURITY MIDDLEWARE (VERY IMPORTANT)
+// ------------------------------------------------------
+
+// Adds all important headers:
+// - Strict-Transport-Security
+// - X-Frame-Options
+// - X-Content-Type-Options
+// - Referrer-Policy
+// - Permissions-Policy
+// - X-XSS-Protection (legacy browser protection)
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // CSP added manually below
+  })
+);
+
+// Strong Content Security Policy (protects from XSS)
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"]
+    },
+  })
+);
+
+// Extra hardening (recommended)
+app.use(helmet.referrerPolicy({ policy: "no-referrer" }));
+app.use(
+  helmet.permissionsPolicy({
+    features: {
+      camera: [],
+      microphone: [],
+      geolocation: [],
+    },
+  })
+);
+
+// Rate limiting (protect API abuse / bots)
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 50, // allow 50 req/min per IP
+});
+app.use(limiter);
 
 // ------------------------------------------------------
 // BASIC MIDDLEWARE
@@ -24,7 +79,7 @@ app.use(express.urlencoded({ extended: false }));
 app.get("/healthz", (_req, res) => res.send("ok"));
 
 // ------------------------------------------------------
-// PUBLIC POLICY PAGES (must be BEFORE ANY OTHER ROUTES)
+// PUBLIC POLICY PAGES
 // ------------------------------------------------------
 const POLICY_DIR = path.join(__dirname, "policies");
 
@@ -56,14 +111,18 @@ app.use(razorpayWebhook);
 (async () => {
   await registerRoutes(httpServer, app);
 
-  // Error handler
+  // ------------------------------------------------------
+  // SAFE ERROR HANDLER (prevent internal info leak)
+  // ------------------------------------------------------
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
-    console.error(err);
+    console.error("Server Error:", err);
+    res.status(err.status || 500).json({
+      message: "Server error",
+    });
   });
 
   // ------------------------------------------------------
-  // STATIC FILES (frontend build) — MUST BE LAST
+  // STATIC FILES (frontend build)
   // ------------------------------------------------------
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
