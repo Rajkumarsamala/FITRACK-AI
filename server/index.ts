@@ -6,8 +6,10 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Polyfill __dirname for both ESM (dev) and CJS (prod) environments
+const currentDir = typeof __dirname !== 'undefined' 
+  ? __dirname 
+  : path.dirname(fileURLToPath(import.meta.url || 'file://' + process.cwd() + '/server/index.ts'));
 
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -83,7 +85,7 @@ app.get("/healthz", (_req, res) => res.send("ok"));
 // ------------------------------------------------------
 // STATIC POLICY PAGES
 // ------------------------------------------------------
-const POLICY_DIR = path.join(__dirname, "policies");
+const POLICY_DIR = path.join(currentDir, "policies");
 
 app.get("/privacy", (_req, res) =>
   res.sendFile(path.join(POLICY_DIR, "privacy.html"))
