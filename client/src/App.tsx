@@ -16,6 +16,7 @@ import { Tips } from "./pages/Tips";
 import { Profile } from "./pages/Profile";
 import { BodyScan } from "./pages/BodyScan";
 import { Premium } from "./pages/Premium";
+import { Auth } from "./pages/Auth";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -30,8 +31,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   }
   
   if (!isAuthenticated) {
-    window.location.href = "/api/login";
-    return null;
+    return <Redirect to="/auth" />;
   }
   
   return <Component />;
@@ -42,6 +42,9 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/auth">
+        {isAuthenticated ? <Redirect to="/dashboard" /> : <Auth />}
+      </Route>
       <Route path="/">
         {isLoading || !isAuthenticated ? <Landing /> : <Redirect to="/dashboard" />}
       </Route>

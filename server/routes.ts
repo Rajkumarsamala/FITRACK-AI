@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import type { InsertBodyScan } from "@shared/schema";
 import { getUncachableStripeClient } from "./stripeClient";
 import { db } from "./db";
@@ -26,11 +26,11 @@ async function getPremiumPriceId(): Promise<string | null> {
 }
 
 function safeUser(req: any, res: any): string | null {
-  if (!req.user || !req.user.claims || !req.user.claims.sub) {
-    res.status(401).json({ error: "Unauthorized: Missing user claims" });
+  if (!req.user || !req.user.id) {
+    res.status(401).json({ error: "Unauthorized: Missing user session" });
     return null;
   }
-  return req.user.claims.sub;
+  return req.user.id;
 }
 
 export async function registerRoutes(
