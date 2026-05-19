@@ -4,6 +4,10 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -47,15 +51,15 @@ app.use(
 app.use(helmet.referrerPolicy({ policy: "no-referrer" }));
 
 // Permissions policy
-app.use(
-  helmet.permissionsPolicy({
-    features: {
-      camera: [],
-      microphone: [],
-      geolocation: [],
-    },
-  })
-);
+// app.use(
+//   helmet.permissionsPolicy({
+//     features: {
+//       camera: [],
+//       microphone: [],
+//       geolocation: [],
+//     },
+//   })
+// );
 
 // Rate limit: prevents backend abuse
 app.use(

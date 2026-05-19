@@ -5,6 +5,7 @@ import { Layout } from '../components/fitness/Layout';
 import { FitnessCard } from '../components/fitness/FitnessCard';
 import { GoalToggle } from '../components/fitness/GoalToggle';
 import { BackLink } from '../components/fitness/BackLink';
+import { StaggerContainer, StaggerItem, FadeIn } from '../components/fitness/ScrollReveal';
 import { FitnessButton } from '../components/fitness/FitnessButton';
 import { useGoal } from '../contexts/GoalContext';
 import { useUser } from '../contexts/UserContext';
@@ -101,11 +102,26 @@ export function Workouts() {
             />
           </div>
 
-          <FitnessCard className="text-center mb-6">
-            <div className="w-24 h-24 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-6">
-              <Dumbbell className="w-12 h-12 text-purple-400" />
-            </div>
-            <h3 className="text-section-title text-white mb-2">{exercise.name}</h3>
+          <FitnessCard className="text-center mb-6 saas-glass border border-purple-500/30 shadow-[0_0_40px_-10px_rgba(168,85,247,0.3)]">
+            <motion.div 
+              className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500/20 to-indigo-500/20 flex items-center justify-center mx-auto mb-6 relative"
+              animate={{ 
+                scale: [1, 1.1, 1],
+                boxShadow: ['0 0 0px rgba(168,85,247,0)', '0 0 30px rgba(168,85,247,0.4)', '0 0 0px rgba(168,85,247,0)']
+              }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <div className="absolute inset-0 rounded-full border-2 border-purple-500/30 border-dashed animate-spin" style={{ animationDuration: '8s' }} />
+              <Dumbbell className="w-16 h-16 text-purple-400 z-10 animate-pulse-slow" />
+            </motion.div>
+            <motion.h3 
+              className="text-section-title text-white mb-2 saas-gradient-text text-3xl"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={exercise.name}
+            >
+              {exercise.name}
+            </motion.h3>
             <div className="flex items-center justify-center gap-4 text-gray-400 text-body mb-6">
               <span>{exercise.sets} sets</span>
               <span>-</span>
@@ -185,9 +201,10 @@ export function Workouts() {
         </FitnessCard>
       </div>
 
-      <div className="space-y-4">
+      <StaggerContainer className="space-y-4" staggerDelay={0.15}>
         {workouts.map((workout) => (
-          <FitnessCard key={workout.id} className="hover:border-purple-500/50 transition-all" data-testid={`card-workout-${workout.id}`}>
+          <StaggerItem key={workout.id}>
+            <FitnessCard className="saas-card-hover group border border-transparent hover:border-purple-500/30" data-testid={`card-workout-${workout.id}`}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start gap-4">
                 <div className={`w-14 h-14 rounded-xl ${isGaining ? 'bg-green-500/20' : 'bg-orange-500/20'} flex items-center justify-center flex-shrink-0`}>
@@ -231,9 +248,10 @@ export function Workouts() {
                 ))}
               </div>
             </div>
-          </FitnessCard>
+            </FitnessCard>
+          </StaggerItem>
         ))}
-      </div>
+      </StaggerContainer>
     </Layout>
   );
 }

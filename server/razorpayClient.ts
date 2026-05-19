@@ -1,4 +1,4 @@
-import Razorpay = require("razorpay");
+import Razorpay from "razorpay";
 
 const key_id = process.env.RAZORPAY_KEY_ID!;
 const key_secret = process.env.RAZORPAY_KEY_SECRET!;

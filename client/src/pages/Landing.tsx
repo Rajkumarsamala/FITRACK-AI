@@ -102,7 +102,7 @@ export function Landing() {
                 >
                   <Zap className="w-6 h-6 text-white" />
                 </motion.div>
-                <span className="text-xl font-bold text-gradient-animated" data-testid="text-brand">FitTrack AI</span>
+                <span className="text-xl font-bold saas-gradient-text" data-testid="text-brand">FitTrack AI</span>
               </motion.div>
               <div className="flex items-center gap-3">
                 {!isLoading && !isAuthenticated && (
@@ -146,10 +146,10 @@ export function Landing() {
               <h1 className="text-5xl lg:text-7xl font-bold text-white mb-6 leading-tight text-glow" data-testid="text-hero-title">
                 Transform Your Body with
                 <motion.span 
-                  className="block text-gradient-animated mt-2"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
+                  className="block saas-gradient-text mt-2"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5, duration: 0.6 }}
                 >
                   AI-Powered Fitness
                 </motion.span>
@@ -226,10 +226,12 @@ export function Landing() {
           {features.map((feature, index) => (
             <StaggerItem key={index}>
               <motion.div 
-                className="card-animated p-6 lg:p-8 h-full flex flex-col interactive-card"
+                className="saas-glass saas-card-hover p-6 lg:p-8 h-full flex flex-col rounded-2xl relative overflow-hidden group"
                 whileHover={{ y: -5 }}
                 data-testid={`card-feature-${index}`}
               >
+                {/* Decorative glowing orb in corner of card */}
+                <div className="absolute -right-4 -top-4 w-24 h-24 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full blur-xl group-hover:scale-150 transition-transform duration-500" />
                 <div className="relative mb-5">
                   <motion.div 
                     className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg`}
@@ -261,11 +263,12 @@ export function Landing() {
           <ScrollReveal delay={0.1} direction="left">
             <Link href="/onboarding" onClick={() => setGoal('lose-weight')}>
               <motion.div 
-                className="goal-card lose-weight h-full"
-                whileHover={{ y: -8, scale: 1.01 }}
+                className="saas-glass saas-card-hover rounded-2xl h-full p-8 relative overflow-hidden group"
+                whileHover={{ y: -8, scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
                 data-testid="card-goal-lose-weight"
               >
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-red-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <div className="flex items-center gap-4 mb-6">
                   <motion.div 
                     className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30"
@@ -310,11 +313,12 @@ export function Landing() {
           <ScrollReveal delay={0.2} direction="right">
             <Link href="/onboarding" onClick={() => setGoal('gain-weight')}>
               <motion.div 
-                className="goal-card gain-weight h-full"
-                whileHover={{ y: -8, scale: 1.01 }}
+                className="saas-glass saas-card-hover rounded-2xl h-full p-8 relative overflow-hidden group"
+                whileHover={{ y: -8, scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
                 data-testid="card-goal-gain-weight"
               >
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <div className="flex items-center gap-4 mb-6">
                   <motion.div 
                     className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30"
@@ -365,8 +369,8 @@ export function Landing() {
             whileHover={{ scale: 1.01 }}
             transition={{ type: "spring", stiffness: 200 }}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-purple-900/10 to-indigo-900/20 rounded-3xl" />
-            <div className="absolute inset-0 card-animated rounded-3xl" />
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/20 to-black/40 rounded-3xl" />
+            <div className="absolute inset-0 saas-glass rounded-3xl pointer-events-none" />
             <GlowOrb color="purple" position="center" size="xl" />
             
             <div className="relative z-10">

@@ -19,10 +19,10 @@ export function FitnessCard({
   const baseClasses = 'rounded-2xl p-6 lg:p-8 transition-all relative overflow-hidden';
   
   const variantClasses = {
-    default: 'glass',
-    gradient: 'gradient-border',
-    glow: 'glass card-glow',
-    animated: 'card-animated',
+    default: 'saas-glass saas-card-hover',
+    gradient: 'gradient-border saas-card-hover',
+    glow: 'saas-glass saas-card-hover card-glow',
+    animated: 'saas-glass saas-card-hover',
   };
 
   return (
