@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Crown, 
@@ -100,8 +101,11 @@ export function Premium() {
   const isPremium = subscription?.status === 'active' && subscription?.plan === 'premium';
   const trialUsed = trialUsage?.bodyScanUsed;
 
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+
   const handleSubscribe = () => {
-    window.location.href = '/api/create-checkout-session';
+    setShowPaymentModal(true);
   };
 
   return (
@@ -328,6 +332,73 @@ export function Premium() {
             )}
           </FitnessCard>
         </ScrollReveal>
+        {showPaymentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-zinc-950 border border-purple-500/30 rounded-2xl p-6 max-w-md w-full relative saas-glass shadow-[0_0_40px_-10px_rgba(168,85,247,0.3)]"
+            >
+              <button 
+                onClick={() => { setShowPaymentModal(false); setPaymentSuccess(false); }}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+              
+              {!paymentSuccess ? (
+                <div className="text-center">
+                  <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-4">
+                    <Scan className="w-8 h-8 text-purple-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2">Upgrade to Premium</h3>
+                  <p className="text-gray-400 mb-6">
+                    Scan the QR code below using PhonePe, GPay, or any UPI app to pay ₹{Math.round(PREMIUM_PRICE * 83)} (~${PREMIUM_PRICE}).
+                  </p>
+                  
+                  <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=9347058977@ibl%26pn=FitTrack%26cu=INR`} 
+                      alt="UPI QR Code" 
+                      className="w-48 h-48"
+                    />
+                  </div>
+                  
+                  <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-6">
+                    <p className="text-sm text-gray-400 mb-1">UPI ID</p>
+                    <p className="text-white font-mono text-lg font-medium tracking-wider">9347058977@ibl</p>
+                  </div>
+                  
+                  <FitnessButton 
+                    className="w-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                    size="lg"
+                    onClick={() => setPaymentSuccess(true)}
+                  >
+                    <Check className="w-5 h-5" />
+                    I have completed the payment
+                  </FitnessButton>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
+                    <Check className="w-10 h-10 text-green-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-4">Payment Under Review</h3>
+                  <p className="text-gray-400 mb-8">
+                    Thank you! Your payment is being verified by our team. Your premium features will be activated within 24 hours.
+                  </p>
+                  <FitnessButton 
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => { setShowPaymentModal(false); setPaymentSuccess(false); }}
+                  >
+                    Close
+                  </FitnessButton>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
       </div>
     </Layout>
   );
