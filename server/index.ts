@@ -116,6 +116,18 @@ app.use(razorpayWebhook);
   await registerRoutes(httpServer, app);
 
   // ------------------------------------------------------
+  // AUTOMATIC MIGRATIONS
+  // ------------------------------------------------------
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR`);
+    console.log("Successfully ran automatic migrations.");
+  } catch (err) {
+    console.error("Failed to run automatic migrations:", err);
+  }
+
+  // ------------------------------------------------------
   // SAFE ERROR HANDLER
   // ------------------------------------------------------
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
