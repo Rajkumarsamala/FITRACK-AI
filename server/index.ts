@@ -134,7 +134,16 @@ app.use(razorpayWebhook);
   }
 
   const port = parseInt(process.env.PORT || "5000");
-  httpServer.listen({ port, host: "0.0.0.0" }, () =>
-    console.log("Serving on port", port)
-  );
+  httpServer.listen({ port, host: "0.0.0.0" }, () => {
+    console.log("Serving on port", port);
+
+    // Keep-alive ping for Render free tier
+    if (process.env.RENDER_EXTERNAL_URL) {
+      setInterval(() => {
+        fetch(`${process.env.RENDER_EXTERNAL_URL}/healthz`)
+          .then(res => console.log(`Keep-alive ping sent to ${process.env.RENDER_EXTERNAL_URL}/healthz: ${res.status}`))
+          .catch(err => console.error(`Keep-alive ping failed:`, err));
+      }, 14 * 60 * 1000); // Ping every 14 minutes
+    }
+  });
 })();
